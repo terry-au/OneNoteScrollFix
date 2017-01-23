@@ -11,7 +11,7 @@
 #define DEFAULT_UNDO_TITLE @"Undo"
 #define DEFAULT_REDO_TITLE @"Redo"
 
-#define INVOCATION_STATE_KEY @"IState"
+#define DEFER_SCROLLING @"DeferScroll"
 
 // Notifications
 static NSString *kUndoRedoInvocationNotificationName = @"ONSFUndoRedoInvocation";
@@ -19,11 +19,6 @@ static NSString *kUndoRedoInvocationNotificationName = @"ONSFUndoRedoInvocation"
 // Localised Button titles
 static NSString *kLocalisedUndoButtonTitle = nil;
 static NSString *kLocalisedRedoButtonTitle = nil;
-
-typedef NS_ENUM(BOOL, ONSFScrollDeference){
-	ONSFScrollDeferenceDisabled = NO,
-	ONSFScrollDeferenceEnabled = YES
-};
 
 %hook ONPageViewController
 
@@ -43,8 +38,8 @@ typedef NS_ENUM(BOOL, ONSFScrollDeference){
 %new
 - (void)ONSF_undoRedoInvocation:(NSNotification *)notification{
 	NSDictionary *userInfo = notification.userInfo;
-	id temp = [userInfo objectForKey:INVOCATION_STATE_KEY];
-	BOOL deferScrollChanges = temp ? [temp boolValue] : ONSFScrollDeferenceDisabled;
+	id temp = [userInfo objectForKey:DEFER_SCROLLING];
+	BOOL deferScrollChanges = temp ? [temp boolValue] : NO;
 	self.scrollView.ONSF_deferScrollChanges = deferScrollChanges;
 }
 
@@ -55,7 +50,7 @@ typedef NS_ENUM(BOOL, ONSFScrollDeference){
 %property (nonatomic, retain) BOOL ONSF_deferScrollChanges;
 
 - (void)setContentOffset:(CGPoint)contentOffset{
-	if (self.ONSF_deferScrollChanges == ONSFScrollDeferenceEnabled){
+	if (self.ONSF_deferScrollChanges){
 		return;
 	}
 	%orig;
@@ -82,7 +77,7 @@ static BOOL contains_valid_accessory(OUIOfficeSpaceDataSourceProxy *proxy){
 	if (contains_valid_accessory(self)){
 		isUndoRedoButton = YES;
 		nc = NSNotificationCenter.defaultCenter;
-		NSDictionary *userInfo = @{INVOCATION_STATE_KEY : @(ONSFScrollDeferenceEnabled)};
+		NSDictionary *userInfo = @{DEFER_SCROLLING : @(YES)};
 		[nc postNotificationName:kUndoRedoInvocationNotificationName object:nil userInfo:userInfo];
 	}
 
@@ -91,7 +86,7 @@ static BOOL contains_valid_accessory(OUIOfficeSpaceDataSourceProxy *proxy){
 	if (isUndoRedoButton){
 		// A delay is needed. I don't know why.
 		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.01 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-			NSDictionary *userInfo = @{INVOCATION_STATE_KEY : @(ONSFScrollDeferenceDisabled)};
+			NSDictionary *userInfo = @{DEFER_SCROLLING : @(NO)};
 		    [nc postNotificationName:kUndoRedoInvocationNotificationName object:nil userInfo:userInfo];
 		});
 	}
