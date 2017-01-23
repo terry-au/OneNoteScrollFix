@@ -1,0 +1,9 @@
+Package: com.terry1994.onenotescrollfix
+Name: OneNoteScrollFix
+Depends: mobilesubstrate
+Version: 0.0.1
+Architecture: iphoneos-arm
+Description: Fix the abrupt scrolling to the top of the page that occurs when undoing.
+Maintainer: Terry Lewis
+Author: Terry Lewis
+Section: Tweaks
