@@ -11,39 +11,41 @@
 #define DEFAULT_UNDO_TITLE @"Undo"
 #define DEFAULT_REDO_TITLE @"Redo"
 
+#define INVOCATION_STATE_KEY @"IState"
+
 // Notifications
-static NSString *kUndoRedoWillInvokeNotificationName = @"ONSFUndoRedoWillInvoke";
-static NSString *kUndoRedoDidInvokeNotificationName = @"ONSFUndoRedoDidInvoke";
+static NSString *kUndoRedoInvocationNotificationName = @"ONSFUndoRedoInvocation";
 
 // Localised Button titles
 static NSString *kLocalisedUndoButtonTitle = nil;
 static NSString *kLocalisedRedoButtonTitle = nil;
+
+typedef NS_ENUM(BOOL, ONSFScrollDeference){
+	ONSFScrollDeferenceDisabled = NO,
+	ONSFScrollDeferenceEnabled = YES
+};
 
 %hook ONPageViewController
 
 - (void)loadView{
 	%orig;
 	NSNotificationCenter *notificationCenter = NSNotificationCenter.defaultCenter;
-	[notificationCenter addObserver:self selector:@selector(ONSF_willUndo:) name:kUndoRedoWillInvokeNotificationName object:nil];
-	[notificationCenter addObserver:self selector:@selector(ONSF_didUndo:) name:kUndoRedoDidInvokeNotificationName object:nil];
+	[notificationCenter addObserver:self selector:@selector(ONSF_undoRedoInvocation:) name:kUndoRedoInvocationNotificationName object:nil];
 }
 
 - (void)dealloc{
 	NSNotificationCenter *notificationCenter = NSNotificationCenter.defaultCenter;
-    [notificationCenter removeObserver:self name:kUndoRedoWillInvokeNotificationName object:nil];
-    [notificationCenter removeObserver:self name:kUndoRedoDidInvokeNotificationName object:nil];
+    [notificationCenter removeObserver:self name:kUndoRedoInvocationNotificationName object:nil];
 
 	%orig;
 }
 
 %new
-- (void)ONSF_willUndo:(id)sender{
-	self.scrollView.ONSF_deferScrollChanges = YES;
-}
-
-%new
-- (void)ONSF_didUndo:(id)sender{
-	self.scrollView.ONSF_deferScrollChanges = NO;
+- (void)ONSF_undoRedoInvocation:(NSNotification *)notification{
+	NSDictionary *userInfo = notification.userInfo;
+	id temp = [userInfo objectForKey:INVOCATION_STATE_KEY];
+	BOOL deferScrollChanges = temp ? [temp boolValue] : ONSFScrollDeferenceDisabled;
+	self.scrollView.ONSF_deferScrollChanges = deferScrollChanges;
 }
 
 %end
@@ -53,7 +55,7 @@ static NSString *kLocalisedRedoButtonTitle = nil;
 %property (nonatomic, retain) BOOL ONSF_deferScrollChanges;
 
 - (void)setContentOffset:(CGPoint)contentOffset{
-	if (self.ONSF_deferScrollChanges){
+	if (self.ONSF_deferScrollChanges == ONSFScrollDeferenceEnabled){
 		return;
 	}
 	%orig;
@@ -80,7 +82,8 @@ static BOOL contains_valid_accessory(OUIOfficeSpaceDataSourceProxy *proxy){
 	if (contains_valid_accessory(self)){
 		isUndoRedoButton = YES;
 		nc = NSNotificationCenter.defaultCenter;
-		[nc postNotificationName:kUndoRedoWillInvokeNotificationName object:nil];
+		NSDictionary *userInfo = @{INVOCATION_STATE_KEY : @(ONSFScrollDeferenceEnabled)};
+		[nc postNotificationName:kUndoRedoInvocationNotificationName object:nil userInfo:userInfo];
 	}
 
 	%orig;
@@ -88,7 +91,8 @@ static BOOL contains_valid_accessory(OUIOfficeSpaceDataSourceProxy *proxy){
 	if (isUndoRedoButton){
 		// A delay is needed. I don't know why.
 		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.01 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-		    [nc postNotificationName:kUndoRedoDidInvokeNotificationName object:nil];
+			NSDictionary *userInfo = @{INVOCATION_STATE_KEY : @(ONSFScrollDeferenceDisabled)};
+		    [nc postNotificationName:kUndoRedoInvocationNotificationName object:nil userInfo:userInfo];
 		});
 	}
 }
